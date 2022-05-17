@@ -11,14 +11,20 @@ let readsFile = __dirname + "/chopped.fasta";
 let copy_pasteReference = true;
 let reference = "";
 // Code
+let lastFilepathResult = "";
 let reads = [];
 let readsNames = [];
 let finalScoresIndexes = [];
+let trimmedReads = [];
+let trimmedReadsNames = [];
 let cachedReferenceLength;
+let pairwised;
 // Parameters
-let percentageFit = 0.0;
-let fakeAlignment = 24;
+// let percentageFit = 0.0;
+let fakeAlignment = 0;
 let minimumReads = 5;
+let minimumScore = 0;
+// TODO: Implement scoring system - higher score - more matcher - highest score === reference.length
 
 window.addEventListener('DOMContentLoaded', () => {
     // Porechop
@@ -57,11 +63,13 @@ window.addEventListener('DOMContentLoaded', () => {
     })
     document.getElementById('referenceSequence').addEventListener('change', () => {
         reference = document.getElementById('referenceSequence').value;
+        minimumScore = reference && reference.length === 0 ? parseInt(document.getElementById('minimumScore').value) : reference.length;
     })
     document.getElementById('referenceFile').addEventListener('change', () => {
         let refFile = document.getElementById('referenceFile').files[0].path;
         let refUnparsedContent = fs.readFileSync(refFile).toString().split("\n");
         reference = getReference(refUnparsedContent);
+        minimumScore = reference && reference.length === 0 ? parseInt(document.getElementById('minimumScore').value) : reference.length;
     })
     // Parameters
     document.getElementById('skipCheckingComplementaryReads').addEventListener('change', () => {
@@ -73,14 +81,13 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('minimumReads').addEventListener('change', () => {
         minimumReads = parseInt(document.getElementById('minimumReads').value);
     })
-    document.getElementById('percentageFit').addEventListener('change', () => {
-        percentageFit = parseFloat(document.getElementById('percentageFit').value.toString().replaceAll(',', "."));
+    document.getElementById('minimumScore').addEventListener('change', () => {
+        minimumScore = document.getElementById('minimumScore').value != '' ? parseInt(document.getElementById('minimumScore').value) : reference.length;
     })
     document.getElementById('submitButton').addEventListener('click', async () => {
         switchView("preSection", false);
         switchView('loadingScreen', true);
         finalScoresIndexes = [];
-        percentageFit = document.getElementById('percentageFit').value === "" ? 0.0 : parseFloat(document.getElementById('percentageFit').value.toString().replaceAll(',', "."));
         setTimeout(() => {
             main();
         }, 100)
@@ -106,18 +113,11 @@ let displayResults = () => {
     let rows = [
         `Number of reads: <b>${reads.length}</b>`,
         `Number of scores: <b>${finalScoresIndexes.length}</b>`,
-        `Percentage fit: <b>${percentageFit}</b>`,
         `Fake alignment: <b>${fakeAlignment}</b>`
     ];
     for (let row of rows) {
         addDivToResults(`<p>${row}</p>`)
     }
-}
-
-function sleep(ms) {
-    return new Promise((resolve) => {
-        setTimeout(resolve, ms);
-    });
 }
 
 let clearResults = () => {
@@ -195,12 +195,13 @@ let addComplementaryReads = () => {
     }
 }
 
+// Deprecated
 let getPerfectReads = () => {
     return new Promise((resolve, reject) => {
         for (let i = 0; i < reads.length; i++) {
             if (reads[i].includes(reference)) {
                 finalScoresIndexes.push(i);
-                percentageFit = 100;
+                // percentageFit = 100;
             }
         }
         if (finalScoresIndexes.length > minimumReads) {
@@ -212,9 +213,10 @@ let getPerfectReads = () => {
     })
 }
 
+// Deprecated
 let getMinimumReads = async () => {
-    percentageFit = 100;
-    while (finalScoresIndexes.length <= minimumReads && percentageFit > 5) {
+    // percentageFit = 100;
+    /* while (finalScoresIndexes.length <= minimumReads && percentageFit > 5) {
         percentageFit -= 5;
         await sleep(10);
         getResultsMinimumPercentage();
@@ -225,17 +227,10 @@ let getMinimumReads = async () => {
     displayResults();
     if (percentageFit < 10) {
         addDivToResults(`<p>Warning! The results have less than 10% fit</p>`)
-    }
+    } */
 }
 
-let main = () => {
-    porechop().then(() => {
-        performWorkflow();
-    }).catch(() => {
-        performWorkflow();
-    })
-}
-
+// Deprecated
 let getResultsMinimumPercentage = () => {
     let tempReference = reference.split("");
     for (let i = 0; i < fakeAlignment; i++) tempReference.shift();
@@ -243,20 +238,16 @@ let getResultsMinimumPercentage = () => {
     cachedReferenceLength = tempReference.length;
     for (let i = 0; i < reads.length; i++) {
         if (!finalScoresIndexes.includes(i)) {
-            let comp = getComparison(tempReference, reads[i], percentageFit);
+            /* let comp = getComparison(tempReference, reads[i], percentageFit);
             if (comp) {
                 finalScoresIndexes.push(i);
-            }
+            } */
         }
     }
 }
 
+// Deprecated
 let getComparison = (ref, read, percentage) => {
-    // Potencjalna dziura w referencji
-    // Potencjalna dziura w readzie
-    // GATACACACAcGAGAGA
-    // poślizg (maxymalna dlugosc dziury)
-    // max 50 nukleotydow
     let mistakesAllowed = parseInt((ref.length * (100 - percentage)/100).toString());
     for (let i = 0; i < read.length - cachedReferenceLength + mistakesAllowed+1; i++) {
         let allowedMistakes = mistakesAllowed;
@@ -269,6 +260,15 @@ let getComparison = (ref, read, percentage) => {
         if (allowedMistakes >= 0) return true;
     }
     return false;
+}
+
+
+let main = () => {
+    porechop().then(() => {
+        performWorkflow();
+    }).catch(() => {
+        performWorkflow();
+    })
 }
 
 let splitRead = (read) => {
@@ -289,7 +289,7 @@ let splitRead = (read) => {
 let finalizeResults = () => {
     displayResults();
     let dateOfCreation = new Date();
-    let filename = `${__dirname}/results/${dateOfCreation.getFullYear()}-${dateOfCreation.getMonth()}-${dateOfCreation.getDate()}-${dateOfCreation.getHours()}-${dateOfCreation.getMinutes()}-${dateOfCreation.getSeconds()}_results.fasta`;
+    let filename = `${__dirname}/results/${dateOfCreation.getFullYear()}-${dateOfCreation.getMonth()}-${dateOfCreation.getDate()}_${dateOfCreation.getHours()}_${dateOfCreation.getMinutes()}_${dateOfCreation.getSeconds()}_resultsMatchingRef.fasta`;
     let resultContent = "";
     for (let i of finalScoresIndexes) {
         let splittedRead = splitRead(reads[i]);
@@ -303,10 +303,13 @@ let finalizeResults = () => {
         }
     }
     fs.writeFileSync(filename, resultContent);
-    addDivToResults(`<p>Ended. Open your results here:</p><div class="button" id="openResults">Click!</div>`);
-    document.getElementById('openResults').addEventListener('click', () => {
-        openResultsFolder();
-    })
+    lastFilepathResult = filename;
+    addDivToResults(`<p>You can open the results of before pairwising here:</p><div class="button" id="openResults">Click!</div>`);
+    setTimeout(() => {
+        document.getElementById('openResults').addEventListener('click', () => {
+            openResultsFolder();
+        })
+    }, 50)
     switchView('loadingScreen', false);
     switchView("postSection", true);
 }
@@ -318,15 +321,98 @@ let performWorkflow = () => {
     if (!skipCheckingComplementaryReads) {
         addComplementaryReads();
     }
-    if (percentageFit === 0.0) {
-        getPerfectReads().then(() => {
-            finalizeResults();
-        }).catch(() => {
-            getMinimumReads();
-            finalizeResults();
-        })
+    if (reference.length > 59) {
+        preSelectionReads();
     } else {
-        getResultsMinimumPercentage();
-        finalizeResults();
+        finalScoresIndexes = getMatchingReads(reference, reads);
+    }
+    getTrimmedReads();
+    finalizeResults();
+    addDivToResults(`<p>In 5 seconds, pairwise2 comparison will begin</p>`);
+    setTimeout(() => {
+        addDivToResults(`<p>Starting pairwise2ing...</p>`);
+        setTimeout(() => {
+            performPairwise();
+        }, 100)
+    }, 5000)
+}
+
+// Filling trimmed reads
+let getTrimmedReads = () => {
+    for (let i of finalScoresIndexes) {
+        trimmedReads.push(reads[i]);
+        trimmedReadsNames.push(readsNames[i]);
     }
 }
+
+// Filtering out reads that are for sure not matching
+let preSelectionReads = () => {
+    let splittedReference = reference.match(/.{1,20}/g);
+    let tempResults = [];
+    for (let i = 0; i < 3; i++) { // In my opinion (As a developer, here can be instead of 3, splittedReference - 1 (-1 because last can be smaller than 20)
+        if (tempResults.length > minimumReads) break;
+        tempResults.concat(getMatchingReads(splittedReference[i], reads));
+    }
+    finalScoresIndexes = [...new Set(tempResults)];
+}
+
+// Getting all reads that contain 'tempRef'
+let getMatchingReads = (tempRef, tempReads) => {
+    let matchingReadsIndexes = [];
+    for (let i = 0; i < tempReads.length; i++) {
+        if (tempReads[i].includes(tempRef)) {
+            matchingReadsIndexes.push(i);
+        }
+    }
+    return matchingReadsIndexes;
+}
+
+// Performing pairwise, if not working change 'python' to 'python3'
+let performPairwise = () => {
+    pairwised = [];
+    try {
+        let a = execSync(`python pairwise.py ${reference} ${lastFilepathResult}`);
+        pairwised = a.toString().replaceAll('"', "").split("\r\n");
+    } catch (e) {
+        console.log( e );
+        alert(e);
+    }
+    pairwised.pop();
+    parsePairwised();
+    addPairwisedTable();
+}
+
+let parsePairwised = () => {
+    let p = [];
+    for (let pw of pairwised) {
+        let i = pairwised.indexOf(pw);
+        let pairwisedOne = {
+            title: readsNames[i]
+        };
+        let before = pw.split(", ");
+        for (let o of before) {
+            let key = o.split("=")[0];
+            pairwisedOne[key] = o.split("=")[1].replaceAll("'", "");
+        }
+        p.push(pairwisedOne);
+    }
+    pairwised = p;
+}
+
+let addPairwisedTable = () => {
+    switchView("loadingScreen", false);
+    switchView("preSection", false);
+    switchView("postSection", true);
+    clearResults();
+    let resultTable = `<p>Reference</p><p>${reference}</p>`;
+    for (let pwObj of pairwised) {
+        resultTable += `
+<p>Read: <b>${pwObj.title}</b></p>
+<div class="wrapper"><div class="leftCell">Reference</div><div class="rightCell">${pwObj.seqA}</div></div>
+<div class="wrapper"><div class="leftCell">Read</div><div class="rightCell">${pwObj.seqB}</div></div>
+`
+    }
+    // scroll should go with ref and read
+    addDivToResults(resultTable)
+}
+
