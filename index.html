@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>SlaTrim</title>
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
+    <link rel="stylesheet" href="https://unpkg.com/purecss@2.1.0/build/pure-min.css" integrity="sha384-yHIFVG6ClnONEA5yB5DJXfW2/KC173DIQrYoZMEtBvGzmf0PKiGyNEqe9N6BNDBH" crossorigin="anonymous">
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+    <h1>SlaTrim</h1>
+    <div id="loadingScreen" style="display: none;">
+        <div class="button" id="backButton2">Back</div>
+        <h1>Wait for your results...</h1>
+    </div>
+    <div id="preSection">
+        <h2>Reads</h2>
+        <p>
+            <span>I want to use porechop&nbsp;&nbsp;&nbsp;</span>
+            <input type="checkbox" class="checkbox" id="shouldPorechop" checked>
+            <div class="button" id="openPorechop" style="float: right; margin-right: 100px;">Open porechop input directory</div>
+        </p>
+        <div id="shouldNotPorechopSection" style="display: none;">
+            <p>
+                <span>I want to use last porechop result&nbsp;&nbsp;&nbsp;</span>
+                <input type="checkbox" class="checkbox" id="useLastPorechopResult" checked>
+            </p>
+        </div>
+        <div id="lastPorechopResultSection" style="display: none;">
+            <p>
+                <p>Select reads custom file&nbsp;&nbsp;&nbsp;</p>
+                <input type="file" id="readsFile">
+            </p>
+        </div>
+        <h2>Reference</h2>
+        <div class="referenceSection"></div>
+        <div>
+            <span>I want to copy-paste sequence &nbsp;&nbsp;&nbsp;</span>
+            <input type="checkbox" class="checkbox" id="copy_paste" checked>
+        </div>
+        <div id="copyPasteSection">
+            <p>
+                <input type="text" id="referenceSequence" placeholder="GATTACA" class="textInput_sequence">
+            </p>
+        </div>
+        <div id="notCopyPasteSection" style="display: none;">
+            <p>
+                <input type="file" id="referenceFile">
+            </p>
+        </div>
+        <h2>Parameters</h2>
+        <p>
+            <span>I want to skip checking and adding complementary reads &nbsp;&nbsp;&nbsp;</span>
+            <input type="checkbox" class="checkbox" id="skipCheckingComplementaryReads">
+        </p>
+        <p>
+            <span>Fake alignment (default: 24) &nbsp;&nbsp;&nbsp;</span>
+            <input type="number" id="fakeAlignment">
+        </p>
+        <p>
+            <span>Minimum reads (default: 5) &nbsp;&nbsp;&nbsp;</span>
+            <input type="number" id="minimumReads">
+        </p>
+        <p>
+            <span>Percentage Fit - to get result all reads fitting with exact percentage. (Default: ignored, minimum reads taken into account)</span>
+            <input type="number" id="percentageFit">
+        </p>
+        <div class="button" id="submitButton">Get results</div>
+    </div>
+    <div id="postSection" style="display: none;">
+        <div class="button" id="backButton">Back</div>
+        <div id="resultsSection"></div>
+    </div>
+<footer>
+    Made by Tomasz Dąbrowski
+</footer>
+</body>
+</html>

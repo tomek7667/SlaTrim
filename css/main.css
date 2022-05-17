@@ -1,0 +1,37 @@
+
+body {
+    padding: 25px;
+}
+
+td {
+    width: 50px;
+}
+
+.checkbox {
+    transform: scale(2);
+}
+
+.textInput_sequence {
+    padding: 5px;
+    width: 600px;
+}
+
+.button {
+    padding: 5px 20px;
+    transition: 0.3s;
+    background-color: #c7c7c7;
+    width:  120px;
+    text-align: center;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+.button:hover {
+    background-color: lightgray;
+}
+
+footer {
+    position: absolute;
+    bottom: 25px;
+    text-align: center;
+}
