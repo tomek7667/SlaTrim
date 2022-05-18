@@ -36,20 +36,27 @@ footer {
     text-align: center;
 }
 
-.wrapper {
+.readName {
     width: 100%;
+    float: left;
     overflow-x: scroll;
     height: 50px;
 }
 
-.leftCell {
-    width: 20%;
+.labelText {
+    width: 100%;
     float: left;
     height: 50px;
+    text-align: left;
 }
 
-.rightCell {
-    width: 80%;
+.dnaSequence {
+    width: 100%;
     float: left;
     height: 50px;
+    overflow-x: scroll;
+    font-family: Courier, monospace;
+}
+.wrapper {
+    width: 100%;
 }

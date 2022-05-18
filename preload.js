@@ -6,14 +6,16 @@ const fs = require('fs');
 let shouldPorechop = true;
 let useLastPorechopResult = false;
 let skipCheckingComplementaryReads = false;
-let readsFile = __dirname + "/chopped.fasta";
+let readsFile = __dirname + "/chopped.fastq";
 // Reference
 let copy_pasteReference = true;
 let reference = "";
 // Code
-let lastFilepathResult = "";
+let lastFilepathResult_fasta = "";
+let lastFilepathResult_fastq = "";
 let reads = [];
 let readsNames = [];
+let fastQFooter = [];
 let finalScoresIndexes = [];
 let trimmedReads = [];
 let trimmedReadsNames = [];
@@ -131,18 +133,19 @@ let addDivToResults = (d) => {
 let getReads = (unparsedReads) => {
     reads = [];
     readsNames = [];
-    let currentSequence = "";
-    for (let o of unparsedReads) {
-        if (o.length === 0) continue;
-        if (o[0] === ">" || (o[0] !== "G" && o[0] !== "A" && o[0] !== "T" && o[0] !== "C")) {
-            if (readsNames.length > 0) reads.push(currentSequence);
-            readsNames.push(o);
-            currentSequence = "";
-        } else {
-            currentSequence += o;
+    let i = 0;
+    while (i < unparsedReads.length) {
+        if (unparsedReads[i].trim() === "") {
+            i++;
+            continue;
         }
+        readsNames.push(unparsedReads[i].trim());
+        i++;
+        reads.push(unparsedReads[i].trim());
+        i+=2; // Skips plus sign
+        fastQFooter.push(unparsedReads[i].trim())
+        i++;
     }
-    reads.push(currentSequence);
 }
 
 let switchView = (id, shown) => {
@@ -163,7 +166,7 @@ let porechop = () => {
             switchView('postSection', true);
             addDivToResults(`<h1>Porechopping...</h1>`);
             setTimeout(() => {
-                execSync(`python3 ${__dirname}/Porechop/porechop-runner.py -i ${__dirname}/input -o ${__dirname}/chopped.fasta`);
+                execSync(`python3 ${__dirname}/Porechop/porechop-runner.py -i ${__dirname}/input -o ${__dirname}/chopped.fastq`);
                 clearResults();
                 switchView("preSection", false);
                 switchView('loadingScreen', true);
@@ -289,22 +292,29 @@ let splitRead = (read) => {
 let finalizeResults = () => {
     displayResults();
     let dateOfCreation = new Date();
-    let filename = `${__dirname}/results/${dateOfCreation.getFullYear()}-${dateOfCreation.getMonth()}-${dateOfCreation.getDate()}_${dateOfCreation.getHours()}_${dateOfCreation.getMinutes()}_${dateOfCreation.getSeconds()}_resultsMatchingRef.fasta`;
-    let resultContent = "";
+    let filenameFasta = `${__dirname}/results/${dateOfCreation.getFullYear()}-${dateOfCreation.getMonth()}-${dateOfCreation.getDate()}_${dateOfCreation.getHours()}_${dateOfCreation.getMinutes()}_${dateOfCreation.getSeconds()}_resultsMatchingRef.fasta`;
+    let filenameFastq = `${__dirname}/results/${dateOfCreation.getFullYear()}-${dateOfCreation.getMonth()}-${dateOfCreation.getDate()}_${dateOfCreation.getHours()}_${dateOfCreation.getMinutes()}_${dateOfCreation.getSeconds()}_resultsMatchingRef.fastq`;
+    let resultContent_fasta = "";
+    let resultContent_fastq = "";
     for (let i of finalScoresIndexes) {
         let splittedRead = splitRead(reads[i]);
-        if (readsNames[i] === ">") {
-            resultContent += readsNames[i] + "\n";
+        if (readsNames[i][0] === ">") {
+            resultContent_fasta += readsNames[i] + "\n";
         } else {
-            resultContent += ">" + readsNames[i] + "\n";
+            resultContent_fasta += ">" + readsNames[i] + "\n";
         }
         for (let j of splittedRead) {
-            resultContent += j + "\n";
+            resultContent_fasta += j + "\n";
         }
+        resultContent_fastq += readsNames[i] + "\n";
+        resultContent_fastq += reads[i] + "\n+\n";
+        resultContent_fastq += fastQFooter[i] + "\n";
     }
-    fs.writeFileSync(filename, resultContent);
-    lastFilepathResult = filename;
-    addDivToResults(`<p>You can open the results of before pairwising here:</p><div class="button" id="openResults">Click!</div>`);
+    fs.writeFileSync(filenameFasta, resultContent_fasta);
+    fs.writeFileSync(filenameFastq, resultContent_fastq);
+    lastFilepathResult_fasta = filenameFasta;
+    lastFilepathResult_fastq = filenameFastq;
+    addDivToResults(`<p>You can open the results of before pairwising here:</p><div class="button" id="openResults">Open folder</div>`);
     setTimeout(() => {
         document.getElementById('openResults').addEventListener('click', () => {
             openResultsFolder();
@@ -328,13 +338,13 @@ let performWorkflow = () => {
     }
     getTrimmedReads();
     finalizeResults();
-    addDivToResults(`<p>In 5 seconds, pairwise2 comparison will begin</p>`);
-    setTimeout(() => {
+    addDivToResults(`<br><div class="button" id="pairwisingStartButton">Click here to continue (alignment)</div>`);
+    document.getElementById('pairwisingStartButton').addEventListener('click', () => {
         addDivToResults(`<p>Starting pairwise2ing...</p>`);
         setTimeout(() => {
             performPairwise();
         }, 100)
-    }, 5000)
+    })
 }
 
 // Filling trimmed reads
@@ -371,48 +381,82 @@ let getMatchingReads = (tempRef, tempReads) => {
 let performPairwise = () => {
     pairwised = [];
     try {
-        let a = execSync(`python pairwise.py ${reference} ${lastFilepathResult}`);
-        pairwised = a.toString().replaceAll('"', "").split("\r\n");
+        /*try {
+            alert("Python Bio module installation");
+            let pip3output = execSync(`pip3 install bio`);
+            if (pip3output.toString().includes("already")) {
+                alert("Module already installed.")
+            } else {
+                alert("Module installed");
+            }
+        } catch (e) {
+            alert("Failed installing Bio module.")
+        }*/
+        // let a = execSync(`python3 ${__dirname}/pythonPairwise/pairwise.py ${reference} ${lastFilepathResult_fasta} 0.7`,  { encoding: 'utf8' });
+        fs.writeFileSync(`${__dirname}/ref.fa`, ">Reference\n"+reference);
+        let a = execSync(`${__dirname}/bwa/bwa aln ${__dirname}/ref.fa ${lastFilepathResult_fastq}`)
+        console.log(a.toString());
+        pairwised = a.toString().replaceAll("'", "").split("\n");
+        if (process.platform === 'win32') {
+            pairwised = a.toString().replaceAll("'", "").split("\r\n");
+        }
+        pairwised.pop(); // Last empty element
+        pairwised = parsePairwised(pairwised);
+        pairwised = filterGoodScore(pairwised);
+        addPairwisedTable(pairwised);
     } catch (e) {
         console.log( e );
         alert(e);
+        addDivToResults(`Pairwising failed`)
     }
-    pairwised.pop();
-    parsePairwised();
-    addPairwisedTable();
 }
 
-let parsePairwised = () => {
+let parsePairwised = (pws) => {
     let p = [];
-    for (let pw of pairwised) {
-        let i = pairwised.indexOf(pw);
+    for (let pw of pws) {
+        let i = pws.indexOf(pw);
         let pairwisedOne = {
-            title: readsNames[i]
+            title: readsNames[i].replaceAll("\n", " ")
         };
         let before = pw.split(", ");
         for (let o of before) {
             let key = o.split("=")[0];
-            pairwisedOne[key] = o.split("=")[1].replaceAll("'", "");
+            pairwisedOne[key] = o.split("=")[1];
         }
         p.push(pairwisedOne);
     }
-    pairwised = p;
+    return p;
 }
 
-let addPairwisedTable = () => {
+let filterGoodScore = (pws) => {
+    let filteredOut = [];
+    for (let pw of pws) {
+        if (pw.score >= minimumScore) filteredOut.push(pw);
+    }
+    return filteredOut;
+}
+
+let addPairwisedTable = (pws) => {
     switchView("loadingScreen", false);
     switchView("preSection", false);
     switchView("postSection", true);
     clearResults();
+    let resultDiv = document.createElement("div");
     let resultTable = `<p>Reference</p><p>${reference}</p>`;
-    for (let pwObj of pairwised) {
-        resultTable += `
-<p>Read: <b>${pwObj.title}</b></p>
-<div class="wrapper"><div class="leftCell">Reference</div><div class="rightCell">${pwObj.seqA}</div></div>
-<div class="wrapper"><div class="leftCell">Read</div><div class="rightCell">${pwObj.seqB}</div></div>
-`
+    resultDiv.innerHTML += resultTable;
+    for (let pwObj of pws) {
+        let seqA = pwObj.seqA.replaceAll("\n", "");
+        let seqB = pwObj.seqB.replaceAll("\n", "");
+        let readName = document.createElement("div");
+        //readName.classList.add("readName");
+        //readName.innerText = `Read: ${pwObj.title}<`;
+        let comparisonDiv = document.createElement("div");
+        comparisonDiv.classList.add("dnaSequence");
+        comparisonDiv.innerHTML = `${seqA.replaceAll("-", "_")}<br>
+${seqB.replaceAll("-", "_")}`
+        //resultDiv.appendChild(readName);
+        resultDiv.appendChild(comparisonDiv);
     }
-    // scroll should go with ref and read
-    addDivToResults(resultTable)
+    document.getElementById('resultsSection').appendChild(resultDiv);
 }
 
