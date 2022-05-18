@@ -274,21 +274,6 @@ let main = () => {
     })
 }
 
-let splitRead = (read) => {
-    let string = read;
-    let re = /.{1,70}/g;
-    let hits = [];
-    // Iterate hits
-    let match = null;
-    do {
-        match = re.exec(string);
-        if(match) {
-            hits.push(match[0]);
-        }
-    } while (match);
-    return hits;
-}
-
 let finalizeResults = () => {
     displayResults();
     let dateOfCreation = new Date();
@@ -393,9 +378,14 @@ let performPairwise = () => {
             alert("Failed installing Bio module.")
         }*/
         // let a = execSync(`python3 ${__dirname}/pythonPairwise/pairwise.py ${reference} ${lastFilepathResult_fasta} 0.7`,  { encoding: 'utf8' });
-        fs.writeFileSync(`${__dirname}/ref.fasta`, ">Reference\n"+reference);
-        let a = execSync(`${__dirname}/bwa/bwa aln ${__dirname}/ref.fasta ${lastFilepathResult_fastq}`)
-        console.log(a.toString());
+
+        let refDir = sequenceToFasta(reference, "Reference")
+        let dateOfCreation = new Date();
+        let fileName_sam = `${__dirname}/results/${dateOfCreation.getFullYear()}-${dateOfCreation.getMonth()}-${dateOfCreation.getDate()}_${dateOfCreation.getHours()}_${dateOfCreation.getMinutes()}_${dateOfCreation.getSeconds()}_resultsAligned.sam`;
+        let commandLine = `${__dirname}/bwa/minimap2 -a ${refDir} ${lastFilepathResult_fastq} > ${fileName_sam}`;
+        let a = execSync(commandLine);
+        alert(commandLine);
+        return;
         pairwised = a.toString().replaceAll("'", "").split("\n");
         if (process.platform === 'win32') {
             pairwised = a.toString().replaceAll("'", "").split("\r\n");
@@ -460,3 +450,30 @@ ${seqB.replaceAll("-", "_")}`
     document.getElementById('resultsSection').appendChild(resultDiv);
 }
 
+let sequenceToFasta = (sequence, name) => {
+    let date = new Date();
+    let dateFileName = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}_${date.getHours()}_${date.getMinutes()}_${date.getSeconds()}_${name}.fasta`;
+    let resultPath = path.join(__dirname, `/results/${dateFileName}`);
+    let splittedSequence = splitRead(sequence);
+    let fileContent = `>${name}\n`;
+    for (let seq of splittedSequence) {
+        fileContent += `${seq}\n`;
+    }
+    fs.writeFileSync(resultPath, fileContent);
+    return resultPath;
+}
+
+let splitRead = (read) => {
+    let string = read;
+    let re = /.{1,60}/g;
+    let hits = [];
+    // Iterate hits
+    let match = null;
+    do {
+        match = re.exec(string);
+        if(match) {
+            hits.push(match[0]);
+        }
+    } while (match);
+    return hits;
+}

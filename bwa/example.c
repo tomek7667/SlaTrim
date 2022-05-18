@@ -1,60 +1,63 @@
+// To compile:
+//   gcc -g -O2 example.c libminimap2.a -lz
+
+#include <stdlib.h>
+#include <assert.h>
 #include <stdio.h>
 #include <zlib.h>
-#include <string.h>
-#include <errno.h>
-#include <assert.h>
-#include "bwamem.h"
-#include "kseq.h" // for the FASTA/Q parser
-KSEQ_DECLARE(gzFile)
+#include "minimap.h"
+#include "kseq.h"
+KSEQ_INIT(gzFile, gzread)
 
 int main(int argc, char *argv[])
 {
-	bwaidx_t *idx;
-	gzFile fp;
-	kseq_t *ks;
-	mem_opt_t *opt;
+	mm_idxopt_t iopt;
+	mm_mapopt_t mopt;
+	int n_threads = 3;
+
+	mm_verbose = 2; // disable message output to stderr
+	mm_set_opt(0, &iopt, &mopt);
+	mopt.flag |= MM_F_CIGAR; // perform alignment
 
 	if (argc < 3) {
-		fprintf(stderr, "Usage: bwamem-lite <idx.base> <reads.fq>\n");
+		fprintf(stderr, "Usage: minimap2-lite <target.fa> <query.fa>\n");
 		return 1;
 	}
 
-	idx = bwa_idx_load(argv[1], BWA_IDX_ALL); // load the BWA index
-	if (NULL == idx) {
-		fprintf(stderr, "Index load failed.\n");
-		exit(EXIT_FAILURE);
-	}
-	fp = strcmp(argv[2], "-")? gzopen(argv[2], "r") : gzdopen(fileno(stdin), "r");
-	if (NULL == fp) {
-		fprintf(stderr, "Couldn't open %s : %s\n",
-				strcmp(argv[2], "-") ? argv[2] : "stdin",
-				errno ? strerror(errno) : "Out of memory");
-		exit(EXIT_FAILURE);
-	}
-	ks = kseq_init(fp); // initialize the FASTA/Q parser
-	opt = mem_opt_init(); // initialize the BWA-MEM parameters to the default values
+	// open query file for reading; you may use your favorite FASTA/Q parser
+	gzFile f = gzopen(argv[2], "r");
+	assert(f);
+	kseq_t *ks = kseq_init(f);
 
-	while (kseq_read(ks) >= 0) { // read one sequence
-		mem_alnreg_v ar;
-		int i, k;
-		ar = mem_align1(opt, idx->bwt, idx->bns, idx->pac, ks->seq.l, ks->seq.s); // get all the hits
-		for (i = 0; i < ar.n; ++i) { // traverse each hit
-			mem_aln_t a;
-			if (ar.a[i].secondary >= 0) continue; // skip secondary alignments
-			a = mem_reg2aln(opt, idx->bns, idx->pac, ks->seq.l, ks->seq.s, &ar.a[i]); // get forward-strand position and CIGAR
-			// print alignment
-			printf("%s\t%c\t%s\t%ld\t%d\t", ks->name.s, "+-"[a.is_rev], idx->bns->anns[a.rid].name, (long)a.pos, a.mapq);
-			for (k = 0; k < a.n_cigar; ++k) // print CIGAR
-				printf("%d%c", a.cigar[k]>>4, "MIDSH"[a.cigar[k]&0xf]);
-			printf("\t%d\n", a.NM); // print edit distance
-			free(a.cigar); // don't forget to deallocate CIGAR
+	// open index reader
+	mm_idx_reader_t *r = mm_idx_reader_open(argv[1], &iopt, 0);
+	mm_idx_t *mi;
+	while ((mi = mm_idx_reader_read(r, n_threads)) != 0) { // traverse each part of the index
+		mm_mapopt_update(&mopt, mi); // this sets the maximum minimizer occurrence; TODO: set a better default in mm_mapopt_init()!
+		mm_tbuf_t *tbuf = mm_tbuf_init(); // thread buffer; for multi-threading, allocate one tbuf for each thread
+		gzrewind(f);
+		kseq_rewind(ks);
+		while (kseq_read(ks) >= 0) { // each kseq_read() call reads one query sequence
+			mm_reg1_t *reg;
+			int j, i, n_reg;
+			reg = mm_map(mi, ks->seq.l, ks->seq.s, &n_reg, tbuf, &mopt, 0); // get all hits for the query
+			for (j = 0; j < n_reg; ++j) { // traverse hits and print them out
+				mm_reg1_t *r = &reg[j];
+				assert(r->p); // with MM_F_CIGAR, this should not be NULL
+				printf("%s\t%d\t%d\t%d\t%c\t", ks->name.s, ks->seq.l, r->qs, r->qe, "+-"[r->rev]);
+				printf("%s\t%d\t%d\t%d\t%d\t%d\t%d\tcg:Z:", mi->seq[r->rid].name, mi->seq[r->rid].len, r->rs, r->re, r->mlen, r->blen, r->mapq);
+				for (i = 0; i < r->p->n_cigar; ++i) // IMPORTANT: this gives the CIGAR in the aligned regions. NO soft/hard clippings!
+					printf("%d%c", r->p->cigar[i]>>4, MM_CIGAR_STR[r->p->cigar[i]&0xf]);
+				putchar('\n');
+				free(r->p);
+			}
+			free(reg);
 		}
-		free(ar.a); // and deallocate the hit list
+		mm_tbuf_destroy(tbuf);
+		mm_idx_destroy(mi);
 	}
-
-	free(opt);
-	kseq_destroy(ks);
-	gzclose(fp);
-	bwa_idx_destroy(idx);
+	mm_idx_reader_close(r); // close the index reader
+	kseq_destroy(ks); // close the query file
+	gzclose(f);
 	return 0;
 }
