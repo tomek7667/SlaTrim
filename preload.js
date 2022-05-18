@@ -393,8 +393,8 @@ let performPairwise = () => {
             alert("Failed installing Bio module.")
         }*/
         // let a = execSync(`python3 ${__dirname}/pythonPairwise/pairwise.py ${reference} ${lastFilepathResult_fasta} 0.7`,  { encoding: 'utf8' });
-        fs.writeFileSync(`${__dirname}/ref.fa`, ">Reference\n"+reference);
-        let a = execSync(`${__dirname}/bwa/bwa aln ${__dirname}/ref.fa ${lastFilepathResult_fastq}`)
+        fs.writeFileSync(`${__dirname}/ref.fasta`, ">Reference\n"+reference);
+        let a = execSync(`${__dirname}/bwa/bwa aln ${__dirname}/ref.fasta ${lastFilepathResult_fastq}`)
         console.log(a.toString());
         pairwised = a.toString().replaceAll("'", "").split("\n");
         if (process.platform === 'win32') {
@@ -448,8 +448,8 @@ let addPairwisedTable = (pws) => {
         let seqA = pwObj.seqA.replaceAll("\n", "");
         let seqB = pwObj.seqB.replaceAll("\n", "");
         let readName = document.createElement("div");
-        //readName.classList.add("readName");
-        //readName.innerText = `Read: ${pwObj.title}<`;
+        // readName.classList.add("readName");
+        // readName.innerText = `Read: ${pwObj.title}<`;
         let comparisonDiv = document.createElement("div");
         comparisonDiv.classList.add("dnaSequence");
         comparisonDiv.innerHTML = `${seqA.replaceAll("-", "_")}<br>
