@@ -26,9 +26,22 @@ let pairwised;
 let fakeAlignment = 0;
 let minimumReads = 5;
 let minimumScore = 0;
+let currentWorkflowDirectory;
+let customProjectTitle = "";
+let nucleotides_forLongReference = 20;
 // TODO: Implement scoring system - higher score - more matcher - highest score === reference.length
-
+// TODO: wprowadz nazwe badan (blank - bez nazwy) -> nazwa currentWorkflowDirectory
 window.addEventListener('DOMContentLoaded', () => {
+    // Metadata
+    document.getElementById('customProjectTitle').addEventListener('change', () => {
+        let userBadInput = document.getElementById('customProjectTitle').value
+            .replaceAll(" ", "_");
+        customProjectTitle = userBadInput
+            .replaceAll(/[^A-Za-z0-9\-\_]/g, '');
+        document.getElementById('customProjectTitle').value = userBadInput
+            .replaceAll(" ", "_")
+            .replaceAll(/[^A-Za-z0-9\-\_]/g, '');
+    })
     // Porechop
     document.getElementById('openPorechop').addEventListener('click', () => {
         shell.openPath( path.join(__dirname, '/input') );
@@ -83,6 +96,9 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('minimumReads').addEventListener('change', () => {
         minimumReads = parseInt(document.getElementById('minimumReads').value);
     })
+    document.getElementById('nucleotidesSplit').addEventListener('change', () => {
+        nucleotides_forLongReference = parseInt(document.getElementById('nucleotidesSplit').value);
+    })
     document.getElementById('minimumScore').addEventListener('change', () => {
         minimumScore = document.getElementById('minimumScore').value != '' ? parseInt(document.getElementById('minimumScore').value) : reference.length;
     })
@@ -106,8 +122,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
 })
 
-let openResultsFolder = () => {
-    shell.openPath( path.join(__dirname, '/results') );
+let openResultsFolder = (additionalPath="") => {
+    shell.openPath( path.join(__dirname, '/results/'+additionalPath) );
 }
 
 let displayResults = () => {
@@ -277,8 +293,10 @@ let main = () => {
 let finalizeResults = () => {
     displayResults();
     let dateOfCreation = new Date();
-    let filenameFasta = `${__dirname}/results/${dateOfCreation.getFullYear()}-${dateOfCreation.getMonth()}-${dateOfCreation.getDate()}_${dateOfCreation.getHours()}_${dateOfCreation.getMinutes()}_${dateOfCreation.getSeconds()}_resultsMatchingRef.fasta`;
-    let filenameFastq = `${__dirname}/results/${dateOfCreation.getFullYear()}-${dateOfCreation.getMonth()}-${dateOfCreation.getDate()}_${dateOfCreation.getHours()}_${dateOfCreation.getMinutes()}_${dateOfCreation.getSeconds()}_resultsMatchingRef.fastq`;
+    currentWorkflowDirectory = `${dateOfCreation.getFullYear()}-${dateOfCreation.getMonth()}-${dateOfCreation.getDate()}_${dateOfCreation.getHours()}_${dateOfCreation.getMinutes()}_${dateOfCreation.getSeconds()}`;
+    fs.mkdirSync(`${__dirname}/results/${customProjectTitle}_${currentWorkflowDirectory}/`);
+    let filenameFasta = generateResultFileName(dateOfCreation, "resultsMatchingRef.fasta");
+    let filenameFastq =  generateResultFileName(dateOfCreation,"resultsMatchingRef.fastq");
     let resultContent_fasta = "";
     let resultContent_fastq = "";
     for (let i of finalScoresIndexes) {
@@ -325,9 +343,9 @@ let performWorkflow = () => {
     finalizeResults();
     addDivToResults(`<br><div class="button" id="pairwisingStartButton">Click here to continue (alignment)</div>`);
     document.getElementById('pairwisingStartButton').addEventListener('click', () => {
-        addDivToResults(`<p>Starting pairwise2ing...</p>`);
+        addDivToResults(`<p>Aligning begins...</p>`);
         setTimeout(() => {
-            performPairwise();
+            performAlignment();
         }, 100)
     })
 }
@@ -342,11 +360,15 @@ let getTrimmedReads = () => {
 
 // Filtering out reads that are for sure not matching
 let preSelectionReads = () => {
-    let splittedReference = reference.match(/.{1,20}/g);
-    let tempResults = [];
-    for (let i = 0; i < 3; i++) { // In my opinion (As a developer, here can be instead of 3, splittedReference - 1 (-1 because last can be smaller than 20)
-        if (tempResults.length > minimumReads) break;
-        tempResults.concat(getMatchingReads(splittedReference[i], reads));
+    let matcher = new RegExp(`.{1,${nucleotides_forLongReference}}`, 'g');
+    let splittedReference = reference.match(matcher);
+    let tempResults = []; // change to 3 if slawek insists
+    let howManyIterations = splittedReference.length - 1;
+    // howManyIterations = 3;
+    for (let i = 0; i < howManyIterations; i++) { // In my opinion (As a developer, here can be instead of 3, splittedReference - 1 (-1 because last can be smaller than 20)
+        if (tempResults.length >= minimumReads) continue;
+        let tempScores = getMatchingReads(splittedReference[i], reads);
+        tempResults = tempResults.concat(tempScores);
     }
     finalScoresIndexes = [...new Set(tempResults)];
 }
@@ -363,42 +385,61 @@ let getMatchingReads = (tempRef, tempReads) => {
 }
 
 // Performing pairwise, if not working change 'python' to 'python3'
-let performPairwise = () => {
+let performAlignment = () => {
     pairwised = [];
     try {
-        /*try {
-            alert("Python Bio module installation");
-            let pip3output = execSync(`pip3 install bio`);
-            if (pip3output.toString().includes("already")) {
-                alert("Module already installed.")
-            } else {
-                alert("Module installed");
-            }
-        } catch (e) {
-            alert("Failed installing Bio module.")
-        }*/
-        // let a = execSync(`python3 ${__dirname}/pythonPairwise/pairwise.py ${reference} ${lastFilepathResult_fasta} 0.7`,  { encoding: 'utf8' });
-
-        let refDir = sequenceToFasta(reference, "Reference")
+        let refDir = sequenceToFasta(reference, "Reference");
         let dateOfCreation = new Date();
-        let fileName_sam = `${__dirname}/results/${dateOfCreation.getFullYear()}-${dateOfCreation.getMonth()}-${dateOfCreation.getDate()}_${dateOfCreation.getHours()}_${dateOfCreation.getMinutes()}_${dateOfCreation.getSeconds()}_resultsAligned.sam`;
-        let commandLine = `${__dirname}/bwa/minimap2 -a ${refDir} ${lastFilepathResult_fastq} > ${fileName_sam}`;
-        let a = execSync(commandLine);
-        alert(commandLine);
-        return;
-        pairwised = a.toString().replaceAll("'", "").split("\n");
-        if (process.platform === 'win32') {
-            pairwised = a.toString().replaceAll("'", "").split("\r\n");
-        }
-        pairwised.pop(); // Last empty element
-        pairwised = parsePairwised(pairwised);
-        pairwised = filterGoodScore(pairwised);
-        addPairwisedTable(pairwised);
+        let info;
+        let fileName_minimapSamOUT = generateResultFileName(dateOfCreation, "minimapped2.sam");
+        let commandLine_minimap = `${__dirname}/tools/minimap2 -ax map-ont ${refDir} ${lastFilepathResult_fastq} > ${fileName_minimapSamOUT}`;
+        // instead of alerts write on addToResult(a)
+        info = `
+            <div><b>Performing minimap2</b> command:</div>
+            <div class="commandLine">${commandLine_minimap}</div>
+            `
+        addDivToResults(info);
+        setTimeout(() => {
+            let a = execSync(commandLine_minimap);
+            let fileName_sortedBamOUT = generateResultFileName(dateOfCreation, "alignSorted.bam");
+            let fileName_tempSortedSamOUT = generateResultFileName(dateOfCreation, "temporary/samtoolsSort.sort");
+            let commandLine_sort = `${__dirname}/tools/samtools sort -T ${fileName_tempSortedSamOUT} ${fileName_minimapSamOUT} -o ${fileName_sortedBamOUT}`;
+            info = `
+            <div><b>Performing samtools sort</b> command:</div>
+            <div class="commandLine">${commandLine_sort}</div>`
+            addDivToResults(info);
+            setTimeout(() => {
+                let b = execSync(commandLine_sort);
+                let fileName_consensusFastaOUT = generateResultFileName(dateOfCreation, "consensus.fasta");
+                let commandLine_consensus = `${__dirname}/tools/samtools consensus ${fileName_sortedBamOUT} -o ${fileName_consensusFastaOUT}`;
+                info = `
+            <div><b>Extracting consensus</b> command:</div>
+            <div class="commandLine">${commandLine_consensus}</div>`
+                addDivToResults(info)
+                setTimeout(() => {
+                    let c = execSync(commandLine_consensus);
+                    info = `
+            <h3>Ended!</h3>
+            <div>Open your results here:</div>
+            <div class="button" id="openHere">Click!</div>`
+                    addDivToResults(info);
+                    setTimeout(() => {
+                        document.getElementById('openHere').addEventListener('click', () => {
+                            openResultsFolder(`${customProjectTitle}_${currentWorkflowDirectory}/`)
+                        })
+                    }, 50);
+                }, 100)
+            }, 100)
+        }, 100)
     } catch (e) {
         console.log( e );
         alert(e);
         addDivToResults(`Pairwising failed`)
     }
+}
+
+let generateResultFileName = (dateOfCreation, name) => {
+    return `${__dirname}/results/${customProjectTitle}_${currentWorkflowDirectory}/${dateOfCreation.getFullYear()}-${dateOfCreation.getMonth()}-${dateOfCreation.getDate()}_${dateOfCreation.getHours()}_${dateOfCreation.getMinutes()}_${dateOfCreation.getSeconds()}_${name}`;
 }
 
 let parsePairwised = (pws) => {
@@ -452,8 +493,7 @@ ${seqB.replaceAll("-", "_")}`
 
 let sequenceToFasta = (sequence, name) => {
     let date = new Date();
-    let dateFileName = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}_${date.getHours()}_${date.getMinutes()}_${date.getSeconds()}_${name}.fasta`;
-    let resultPath = path.join(__dirname, `/results/${dateFileName}`);
+    let resultPath = generateResultFileName(date, name+".fasta")
     let splittedSequence = splitRead(sequence);
     let fileContent = `>${name}\n`;
     for (let seq of splittedSequence) {

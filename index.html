@@ -14,6 +14,11 @@
         <h1>Wait for your results...</h1>
     </div>
     <div id="preSection">
+        <h2>Metadata</h2>
+        <p>
+            <span>Project custom title (default: blank):</span>
+            <input type="text" class="title_input" id="customProjectTitle">
+        </p>
         <h2>Reads</h2>
         <p>
             <span>I want to use porechop&nbsp;&nbsp;&nbsp;</span>
@@ -55,15 +60,19 @@
         </p>
         <p>
             <span>Fake alignment (default: 0) &nbsp;&nbsp;&nbsp;</span>
-            <input type="number" id="fakeAlignment">
+            <input type="number" id="fakeAlignment" placeholder="0">
         </p>
         <p>
             <span>Minimum reads (default: 5) &nbsp;&nbsp;&nbsp;</span>
-            <input type="number" id="minimumReads">
+            <input type="number" id="minimumReads" placeholder="5">
         </p>
         <p>
             <span>Minimum score (default: length of reference (best)) &nbsp;&nbsp;&nbsp;</span>
             <input type="number" id="minimumScore">
+        </p>
+        <p>
+            <span>Number of nucleotides for long reference to split into smaller sequences (default: 20) &nbsp;&nbsp;&nbsp;</span>
+            <input type="number" id="nucleotidesSplit" placeholder="20">
         </p>
         <div class="button" id="submitButton">Get results</div>
     </div>

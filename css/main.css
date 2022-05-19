@@ -16,6 +16,11 @@ td {
     width: 600px;
 }
 
+.title_input {
+    padding: 5px;
+    width: 300px;
+}
+
 .button {
     padding: 5px 20px;
     transition: 0.3s;
@@ -57,6 +62,14 @@ footer {
     overflow-x: scroll;
     font-family: Courier, monospace;
 }
+
+.commandLine {
+    padding: 9px;
+    border: black 1px;
+    border-radius: 5px;
+    font-family: Courier, monospace;
+}
+
 .wrapper {
     width: 100%;
 }
