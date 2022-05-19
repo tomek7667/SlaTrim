@@ -1,6 +1,6 @@
 {
   "name": "slatrim2",
-  "version": "2.0.0",
+  "version": "2.0.2",
   "main": "main.js",
   "devDependencies": {
     "@electron-forge/cli": "^6.0.0-beta.63",
@@ -50,6 +50,7 @@
     }
   },
   "dependencies": {
+    "bioseq": "^0.1.5",
     "electron-squirrel-startup": "^1.0.0"
   }
 }

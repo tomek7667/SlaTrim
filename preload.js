@@ -1,4 +1,5 @@
 const { shell } = require('electron');
+const bioseq = require("bioseq");
 const path = require('path');
 const { execSync } = require('child_process');
 const fs = require('fs');
@@ -394,25 +395,22 @@ let performAlignment = () => {
         let fileName_minimapSamOUT = generateResultFileName(dateOfCreation, "minimapped2.sam", customProjectTitle);
         let commandLine_minimap = `${__dirname}/tools/minimap2 -ax map-ont ${refDir} ${lastFilepathResult_fastq} > ${fileName_minimapSamOUT}`;
         // instead of alerts write on addToResult(a)
-        info = `
-            <div><b>Performing minimap2</b>...</div>
-            `
+        info = `<div><b>Performing minimap2</b>...</div>`
         addDivToResults(info);
         setTimeout(() => {
             let a = execSync(commandLine_minimap);
             let fileName_sortedBamOUT = generateResultFileName(dateOfCreation, "alignSorted.bam", customProjectTitle);
             let fileName_tempSortedSamOUT = generateResultFileName(dateOfCreation, "temporary/samtoolsSort.sort", customProjectTitle);
             let commandLine_sort = `${__dirname}/tools/samtools sort -T ${fileName_tempSortedSamOUT} ${fileName_minimapSamOUT} -o ${fileName_sortedBamOUT}`;
-            info = `
-            <div><b>Performing samtools sort</b>...</div>`
+            info = `<div><b>Performing samtools sort</b>...</div>`
             addDivToResults(info);
             setTimeout(() => {
                 let b = execSync(commandLine_sort);
                 let fileName_consensusFastaOUT = generateResultFileName(dateOfCreation, "consensus.fasta", customProjectTitle);
                 let commandLine_consensus = `${__dirname}/tools/samtools consensus ${fileName_sortedBamOUT} -o ${fileName_consensusFastaOUT}`;
-                info = `
-            <div><b>Extracting consensus</b> command:</div>`
+                info = `<div><b>Extracting consensus</b>...</div>`
                 addDivToResults(info);
+                let c = execSync(commandLine_consensus);
                 let oldConsensus_content = fs.readFileSync(fileName_consensusFastaOUT)
                     .toString()
                     .split("\n");
@@ -420,13 +418,16 @@ let performAlignment = () => {
                 let consensus_header = `>${customProjectTitle}_Consensus`;
                 oldConsensus_content.splice(0, 0, consensus_header);
                 let newConsensus_content = oldConsensus_content.join("\n");
+                let consensus = fastaRecordToSequence(newConsensus_content);
                 fs.writeFileSync(fileName_consensusFastaOUT, newConsensus_content);
+                let rst = bioseq.align(reference, consensus);
+                let percentageResultString = `${parseInt(10000*rst.score / reference.length)/100}%`;
                 setTimeout(() => {
-                    let c = execSync(commandLine_consensus);
                     info = `
-            <h3>Ended!</h3>
-            <div>Open your results here:</div>
-            <div class="button" id="openHere">Click!</div>`
+        <h3>Ended!</h3>
+        <div>Open your results here:</div><br>
+        <div class="button" id="openHere">Click!</div><br>
+        <p>Reference vs consensus: <b>${percentageResultString}</b></p>`
                     addDivToResults(info);
                     setTimeout(() => {
                         document.getElementById('openHere').addEventListener('click', () => {
@@ -436,7 +437,7 @@ let performAlignment = () => {
                             openResultsFolder();
                         })
                     }, 50);
-                }, 100)
+                }, 500)
             }, 100)
         }, 100)
     } catch (e) {
@@ -444,6 +445,17 @@ let performAlignment = () => {
         alert(e);
         addDivToResults(`Pairwising failed`)
     }
+}
+
+
+let fastaRecordToSequence = (fastaContent) => {
+    let temp = fastaContent.split("\n");
+    temp.shift();
+    let res = "";
+    for (let o of temp) {
+        res += o;
+    }
+    return res.trim();
 }
 
 let generateResultFileName = (dateOfCreation, name, prefix="") => {
@@ -501,7 +513,7 @@ ${seqB.replaceAll("-", "_")}`
 
 let sequenceToFasta = (sequence, name) => {
     let date = new Date();
-    let resultPath = generateResultFileName(date, name+".fasta", prefix="Your")
+    let resultPath = generateResultFileName(date, name+".fasta")
     let splittedSequence = splitRead(sequence);
     let fileContent = `>${name}\n`;
     for (let seq of splittedSequence) {
