@@ -295,8 +295,8 @@ let finalizeResults = () => {
     let dateOfCreation = new Date();
     currentWorkflowDirectory = `${dateOfCreation.getFullYear()}-${dateOfCreation.getMonth()}-${dateOfCreation.getDate()}_${dateOfCreation.getHours()}_${dateOfCreation.getMinutes()}_${dateOfCreation.getSeconds()}`;
     fs.mkdirSync(`${__dirname}/results/${customProjectTitle}_${currentWorkflowDirectory}/`);
-    let filenameFasta = generateResultFileName(dateOfCreation, "resultsMatchingRef.fasta");
-    let filenameFastq =  generateResultFileName(dateOfCreation,"resultsMatchingRef.fastq");
+    let filenameFasta = generateResultFileName(dateOfCreation, `resultsMatchingRef.fasta`, customProjectTitle);
+    let filenameFastq =  generateResultFileName(dateOfCreation,`resultsMatchingRef.fastq`, customProjectTitle);
     let resultContent_fasta = "";
     let resultContent_fastq = "";
     for (let i of finalScoresIndexes) {
@@ -391,31 +391,36 @@ let performAlignment = () => {
         let refDir = sequenceToFasta(reference, "Reference");
         let dateOfCreation = new Date();
         let info;
-        let fileName_minimapSamOUT = generateResultFileName(dateOfCreation, "minimapped2.sam");
+        let fileName_minimapSamOUT = generateResultFileName(dateOfCreation, "minimapped2.sam", customProjectTitle);
         let commandLine_minimap = `${__dirname}/tools/minimap2 -ax map-ont ${refDir} ${lastFilepathResult_fastq} > ${fileName_minimapSamOUT}`;
         // instead of alerts write on addToResult(a)
         info = `
-            <div><b>Performing minimap2</b> command:</div>
-            <div class="commandLine">${commandLine_minimap}</div>
+            <div><b>Performing minimap2</b>...</div>
             `
         addDivToResults(info);
         setTimeout(() => {
             let a = execSync(commandLine_minimap);
-            let fileName_sortedBamOUT = generateResultFileName(dateOfCreation, "alignSorted.bam");
-            let fileName_tempSortedSamOUT = generateResultFileName(dateOfCreation, "temporary/samtoolsSort.sort");
+            let fileName_sortedBamOUT = generateResultFileName(dateOfCreation, "alignSorted.bam", customProjectTitle);
+            let fileName_tempSortedSamOUT = generateResultFileName(dateOfCreation, "temporary/samtoolsSort.sort", customProjectTitle);
             let commandLine_sort = `${__dirname}/tools/samtools sort -T ${fileName_tempSortedSamOUT} ${fileName_minimapSamOUT} -o ${fileName_sortedBamOUT}`;
             info = `
-            <div><b>Performing samtools sort</b> command:</div>
-            <div class="commandLine">${commandLine_sort}</div>`
+            <div><b>Performing samtools sort</b>...</div>`
             addDivToResults(info);
             setTimeout(() => {
                 let b = execSync(commandLine_sort);
-                let fileName_consensusFastaOUT = generateResultFileName(dateOfCreation, "consensus.fasta");
+                let fileName_consensusFastaOUT = generateResultFileName(dateOfCreation, "consensus.fasta", customProjectTitle);
                 let commandLine_consensus = `${__dirname}/tools/samtools consensus ${fileName_sortedBamOUT} -o ${fileName_consensusFastaOUT}`;
                 info = `
-            <div><b>Extracting consensus</b> command:</div>
-            <div class="commandLine">${commandLine_consensus}</div>`
-                addDivToResults(info)
+            <div><b>Extracting consensus</b> command:</div>`
+                addDivToResults(info);
+                let oldConsensus_content = fs.readFileSync(fileName_consensusFastaOUT)
+                    .toString()
+                    .split("\n");
+                oldConsensus_content.shift();
+                let consensus_header = `>${customProjectTitle}_Consensus`;
+                oldConsensus_content.splice(0, 0, consensus_header);
+                let newConsensus_content = oldConsensus_content.join("\n");
+                fs.writeFileSync(fileName_consensusFastaOUT, newConsensus_content);
                 setTimeout(() => {
                     let c = execSync(commandLine_consensus);
                     info = `
@@ -426,6 +431,9 @@ let performAlignment = () => {
                     setTimeout(() => {
                         document.getElementById('openHere').addEventListener('click', () => {
                             openResultsFolder(`${customProjectTitle}_${currentWorkflowDirectory}/`)
+                        })
+                        document.getElementById('openResults').addEventListener('click', () => {
+                            openResultsFolder();
                         })
                     }, 50);
                 }, 100)
@@ -438,8 +446,8 @@ let performAlignment = () => {
     }
 }
 
-let generateResultFileName = (dateOfCreation, name) => {
-    return `${__dirname}/results/${customProjectTitle}_${currentWorkflowDirectory}/${dateOfCreation.getFullYear()}-${dateOfCreation.getMonth()}-${dateOfCreation.getDate()}_${dateOfCreation.getHours()}_${dateOfCreation.getMinutes()}_${dateOfCreation.getSeconds()}_${name}`;
+let generateResultFileName = (dateOfCreation, name, prefix="") => {
+    return `${__dirname}/results/${customProjectTitle}_${currentWorkflowDirectory}/${prefix}${dateOfCreation.getFullYear()}-${dateOfCreation.getMonth()}-${dateOfCreation.getDate()}_${dateOfCreation.getHours()}_${dateOfCreation.getMinutes()}_${dateOfCreation.getSeconds()}_${name}`;
 }
 
 let parsePairwised = (pws) => {
@@ -493,7 +501,7 @@ ${seqB.replaceAll("-", "_")}`
 
 let sequenceToFasta = (sequence, name) => {
     let date = new Date();
-    let resultPath = generateResultFileName(date, name+".fasta")
+    let resultPath = generateResultFileName(date, name+".fasta", prefix="Your")
     let splittedSequence = splitRead(sequence);
     let fileContent = `>${name}\n`;
     for (let seq of splittedSequence) {
